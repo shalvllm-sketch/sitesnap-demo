@@ -1,4 +1,6 @@
 streamlit
 pandas
-PyGithub
-requests
+Pillow
+opencv-python-headless
+numpy
+fpdf
