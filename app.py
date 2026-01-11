@@ -1,222 +1,175 @@
 import streamlit as st
 import pandas as pd
+import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+from fpdf import FPDF
 import os
 from datetime import datetime
-from PIL import Image
+import base64
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
-    page_title="SiteSnap Pro 🏗️",
-    page_icon="👷",
+    page_title="SiteSnap Pro v3",
+    page_icon="🏗️",
     layout="wide"
 )
 
-# --- 2. CSS: INDUSTRIAL THEME ---
-st.markdown("""
-    <style>
-    /* Global Font */
-    html, body, [class*="css"] {
-        font-family: 'Helvetica', 'Arial', sans-serif;
-    }
-    
-    /* Headers */
-    h1, h2, h3 {
-        color: #0f2942; /* Navy Blue */
-        font-weight: 700;
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        background-color: #ff6f00; /* Safety Orange */
-        color: white;
-        border-radius: 5px;
-        border: none;
-        font-weight: bold;
-        padding: 10px 20px;
-    }
-    .stButton > button:hover {
-        background-color: #e65100;
-        color: white;
-    }
-    
-    /* Metrics */
-    div[data-testid="stMetricValue"] {
-        color: #0f2942;
-    }
-    
-    /* Custom Card for Reports */
-    .report-card {
-        background-color: #f8f9fa;
-        border-left: 5px solid #0f2942;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 10px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- 2. ADVANCED FREE IMAGE PROCESSING ---
 
-# --- 3. BACKEND: FILE SYSTEM ---
-DATA_FILE = "site_reports.csv"
-IMG_FOLDER = "site_images"
-
-# Ensure storage exists
-if not os.path.exists(IMG_FOLDER):
-    os.makedirs(IMG_FOLDER)
-
-if not os.path.exists(DATA_FILE):
-    # Create CSV with headers if it doesn't exist
-    df = pd.DataFrame(columns=["Date", "Project", "Inspector", "Category", "Severity", "Notes", "Image_Path"])
-    df.to_csv(DATA_FILE, index=False)
-
-# --- 4. FUNCTIONS ---
-def save_report(project, inspector, category, severity, notes, image_file):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    img_path = "No Image"
+def process_image(upload_file, project_name):
+    """
+    1. Checks for Blur
+    2. Checks for Brightness
+    3. Adds Watermark
+    """
+    # Convert to PIL Image
+    image = Image.open(upload_file)
+    img_array = np.array(image)
     
-    # Save Image if exists
-    if image_file:
-        # Create unique filename: project_timestamp.jpg
-        safe_project = project.replace(" ", "_")
-        safe_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{safe_project}_{safe_time}.jpg"
-        img_path = os.path.join(IMG_FOLDER, filename)
-        
-        # Save to folder
-        with open(img_path, "wb") as f:
-            f.write(image_file.getbuffer())
+    warnings = []
     
-    # Save Data to CSV
-    new_data = {
-        "Date": timestamp,
-        "Project": project,
-        "Inspector": inspector,
-        "Category": category,
-        "Severity": severity,
-        "Notes": notes,
-        "Image_Path": img_path
-    }
+    # A. BLUR DETECTION (Laplacian Variance)
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    variance = cv2.Laplacian(gray, cv2.CV_64F).var()
+    if variance < 100: # Threshold for blur
+        warnings.append("⚠️ Image is Blurry (Hold camera steady)")
+
+    # B. BRIGHTNESS CHECK
+    brightness = np.mean(gray)
+    if brightness < 50:
+        warnings.append("⚠️ Image is Too Dark (Turn on flash)")
     
-    df = pd.read_csv(DATA_FILE)
-    df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
-    df.to_csv(DATA_FILE, index=False)
-    return True
-
-def load_data():
-    return pd.read_csv(DATA_FILE)
-
-# --- 5. SIDEBAR ---
-with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3028/3028573.png", width=80)
-    st.markdown("## SiteSnap Pro")
-    st.markdown("---")
-    menu = st.radio("Navigation", ["📱 New Inspection", "📊 Dashboard", "📁 Gallery"])
-    st.markdown("---")
-    st.info("Logged in as: **Supervisor**")
-
-# --- 6. PAGE: NEW INSPECTION ---
-if menu == "📱 New Inspection":
-    st.title("👷 New Site Inspection")
-    st.markdown("Log a defect, safety issue, or progress update.")
+    # C. WATERMARKING (Evidence Grade)
+    draw = ImageDraw.Draw(image)
     
-    with st.form("inspection_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            project = st.selectbox("Project Site", ["Downtown Plaza", "Riverside Apts", "Central Mall", "HQ Renovation"])
-            inspector = st.text_input("Inspector Name", value="John Doe")
-            severity = st.select_slider("Severity Level", options=["Low", "Medium", "High", "CRITICAL"], value="Low")
+    # Dynamic font size based on image width
+    font_size = int(image.width / 25) 
+    
+    # Text Content
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    watermark_text = f"{project_name} | {timestamp} | SiteSnap Pro"
+    
+    # Draw Text (White with Black Outline for visibility)
+    x, y = 20, image.height - font_size - 20
+    
+    # Outline
+    outline_range = 2
+    for dx in range(-outline_range, outline_range+1):
+        for dy in range(-outline_range, outline_range+1):
+            draw.text((x+dx, y+dy), watermark_text, fill="black")
             
-        with col2:
-            category = st.selectbox("Category", ["Safety Hazard", "Structural Crack", "Plumbing Leak", "Electrical", "Finish/Paint", "General Progress"])
-            # CAMERA INPUT (Works on mobile!)
-            photo = st.camera_input("Take Photo")
-            # Fallback upload if camera not needed
-            uploaded_file = st.file_uploader("Or Upload Image", type=['jpg','png','jpeg'])
+    # Main Text
+    draw.text((x, y), watermark_text, fill="yellow")
+    
+    return image, warnings
+
+# --- 3. PDF GENERATION ---
+class PDF(FPDF):
+    def header(self):
+        self.set_font('Arial', 'B', 15)
+        self.cell(0, 10, 'Site Inspection Report', 0, 1, 'C')
+        self.ln(10)
+
+def generate_pdf(data_row, image_path):
+    pdf = PDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Details
+    pdf.cell(200, 10, txt=f"Project: {data_row['Project']}", ln=True)
+    pdf.cell(200, 10, txt=f"Inspector: {data_row['Inspector']}", ln=True)
+    pdf.cell(200, 10, txt=f"Date: {data_row['Date']}", ln=True)
+    pdf.set_text_color(255, 0, 0) if data_row['Severity'] == 'CRITICAL' else pdf.set_text_color(0, 0, 0)
+    pdf.cell(200, 10, txt=f"Severity: {data_row['Severity']}", ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.multi_cell(0, 10, txt=f"Notes: {data_row['Notes']}")
+    
+    # Image
+    if os.path.exists(image_path):
+        pdf.image(image_path, x=10, y=80, w=100)
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- 4. UI & LOGIC ---
+
+# Temporary Local Storage for Demo
+if 'reports' not in st.session_state:
+    st.session_state.reports = []
+
+st.title("🏗️ SiteSnap Pro: AI Vision Edition")
+
+# Tabs for better UI organization
+tab1, tab2 = st.tabs(["📸 Capture & Analyze", "📄 Reports & PDF"])
+
+with tab1:
+    c1, c2 = st.columns([1, 1])
+    
+    with c1:
+        st.subheader("Inspection Details")
+        project = st.selectbox("Project", ["Downtown Site", "Warehouse B", "Highway 9"])
+        inspector = st.text_input("Inspector", "Supervisor")
+        category = st.selectbox("Category", ["Structural", "Safety", "Electrical", "Finish"])
+        severity = st.select_slider("Severity", ["Low", "Medium", "High", "CRITICAL"])
+        notes = st.text_area("Notes")
+
+    with c2:
+        st.subheader("Image Analysis")
+        img_file = st.camera_input("Snap Photo")
+        
+        processed_img = None
+        if img_file:
+            # RUN ANALYSIS
+            processed_img, warnings = process_image(img_file, project)
             
-        notes = st.text_area("Description / Notes", placeholder="Describe the issue in detail...")
-        
-        image_to_save = photo if photo else uploaded_file
-        
-        submitted = st.form_submit_button("💾 Submit Report")
-        
-        if submitted:
-            if project and notes:
-                save_report(project, inspector, category, severity, notes, image_to_save)
-                st.success(f"Report logged for **{project}** successfully!")
+            # Show Analysis Results
+            if warnings:
+                for w in warnings:
+                    st.warning(w)
             else:
-                st.error("Please fill in Project and Notes.")
+                st.success("✅ Image Quality: Perfect")
+            
+            # Show Watermarked Preview
+            st.image(processed_img, caption="Watermarked Evidence Preview", use_container_width=True)
+            
+            if st.button("💾 Submit Inspection"):
+                # Save locally for this session
+                # 1. Save Image
+                if not os.path.exists("temp_images"): os.makedirs("temp_images")
+                filename = f"temp_images/{datetime.now().strftime('%H%M%S')}.jpg"
+                processed_img.save(filename)
+                
+                # 2. Save Data
+                report_data = {
+                    "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "Project": project,
+                    "Inspector": inspector,
+                    "Severity": severity,
+                    "Notes": notes,
+                    "Image": filename
+                }
+                st.session_state.reports.append(report_data)
+                st.success("Report Saved!")
 
-# --- 7. PAGE: DASHBOARD ---
-elif menu == "📊 Dashboard":
-    st.title("📊 Project Overview")
+with tab2:
+    st.subheader("Generated Reports")
     
-    df = load_data()
-    
-    # Top Level Metrics
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Reports", len(df))
-    m2.metric("Critical Issues", len(df[df['Severity']=="CRITICAL"]))
-    m3.metric("Safety Hazards", len(df[df['Category']=="Safety Hazard"]))
-    m4.metric("Active Sites", df['Project'].nunique())
-    
-    st.markdown("---")
-    
-    # Filters
-    col1, col2 = st.columns(2)
-    with col1:
-        filter_proj = st.multiselect("Filter by Project", df['Project'].unique())
-    with col2:
-        filter_sev = st.multiselect("Filter by Severity", df['Severity'].unique())
-        
-    # Apply Filters
-    if filter_proj:
-        df = df[df['Project'].isin(filter_proj)]
-    if filter_sev:
-        df = df[df['Severity'].isin(filter_sev)]
-        
-    # Display Table
-    st.dataframe(df, use_container_width=True)
-    
-    # Export Button (Upsell Feature!)
-    @st.cache_data
-    def convert_df(df):
-        return df.to_csv(index=False).encode('utf-8')
-
-    csv = convert_df(df)
-    st.download_button(
-        label="📥 Download Report (CSV)",
-        data=csv,
-        file_name='site_report.csv',
-        mime='text/csv',
-    )
-
-# --- 8. PAGE: GALLERY ---
-elif menu == "📁 Gallery":
-    st.title("📁 Site Photos")
-    
-    df = load_data()
-    
-    if df.empty:
-        st.info("No photos logged yet.")
-    else:
-        # Filter out rows with no image
-        df_imgs = df[df['Image_Path'] != "No Image"]
-        
-        # Grid Layout
-        cols = st.columns(3)
-        for index, row in df_imgs.iterrows():
-            if os.path.exists(row['Image_Path']):
-                with cols[index % 3]:
-                    # Dynamic Border Color based on Severity
-                    border_color = "red" if row['Severity'] == "CRITICAL" else "#ddd"
+    if len(st.session_state.reports) > 0:
+        for i, report in enumerate(st.session_state.reports):
+            with st.expander(f"{report['Date']} - {report['Project']} ({report['Severity']})"):
+                col_a, col_b = st.columns([1, 2])
+                with col_a:
+                    st.image(report['Image'])
+                with col_b:
+                    st.write(f"**Notes:** {report['Notes']}")
                     
-                    st.image(row['Image_Path'], use_container_width=True)
-                    st.markdown(f"""
-                        <div class="report-card" style="border-left: 5px solid {border_color}">
-                            <b>{row['Project']}</b><br>
-                            <span style="color:grey; font-size:12px">{row['Date']}</span><br>
-                            <span style="font-weight:bold; color:{border_color}">{row['Severity']}</span>: {row['Category']}<br>
-                            <small>{row['Notes']}</small>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    # PDF BUTTON
+                    pdf_bytes = generate_pdf(report, report['Image'])
+                    st.download_button(
+                        label="📄 Download Official PDF",
+                        data=pdf_bytes,
+                        file_name=f"Report_{i}.pdf",
+                        mime='application/pdf'
+                    )
+    else:
+        st.info("No reports submitted yet.")
