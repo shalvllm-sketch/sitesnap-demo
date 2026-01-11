@@ -2,263 +2,263 @@ import streamlit as st
 import pandas as pd
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 from fpdf import FPDF
 import os
+import csv
 from datetime import datetime
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
-    page_title="SiteSnap Compliance | Enterprise",
+    page_title="SiteSnap Compliance v5",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. COMPLIANCE THEME CSS (SERIOUS & CLEAN) ---
+# --- 2. THEME & CSS ---
 st.markdown("""
     <style>
-    /* Global Font - System UI */
-    html, body, [class*="css"] {
-        font-family: 'Segoe UI', 'Roboto', sans-serif;
-    }
+    /* COMPLIANCE THEME */
+    h1, h2, h3 { color: #2c3e50; font-family: 'Segoe UI', sans-serif; }
+    .stApp { background-color: #f8f9fa; }
     
-    /* Headers - Navy Blue for Trust */
-    h1, h2, h3 {
-        color: #2c3e50;
-        font-weight: 600;
-    }
+    /* STATUS BADGES */
+    .status-ok { color: green; font-weight: bold; }
+    .status-alert { color: red; font-weight: bold; }
     
-    /* Sidebar - Dark Professional */
-    section[data-testid="stSidebar"] {
-        background-color: #f8f9fa;
-        border-right: 1px solid #e9ecef;
-    }
-    
-    /* Status Badges */
-    .badge-critical { background-color: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-    .badge-medium { background-color: #ffc107; color: black; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-    .badge-low { background-color: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-    
-    /* Input Fields */
-    .stTextInput > div > div > input {
-        border: 1px solid #ced4da;
-    }
+    /* AUDIT LOG TABLE STYLE */
+    .audit-table { font-family: 'Courier New', monospace; font-size: 12px; }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# --- 3. MOCK DATABASE & AUTHENTICATION ---
-# In a real app, this connects to SQL/Supabase.
-USERS = {
-    "worker": {"password": "123", "role": "Worker", "name": "John (Site A)"},
-    "manager": {"password": "456", "role": "Supervisor", "name": "Sarah (Regional)"},
-    "admin": {"password": "789", "role": "Admin", "name": "System Administrator"}
-}
+# --- 3. PERSISTENT STORAGE SETUP ---
+DATA_FILE = "compliance_reports.csv"
+LOG_FILE = "access_logs.csv"
+IMG_DIR = "evidence_photos"
 
-DATA_FILE = "compliance_log.csv"
+# Ensure directories exist
+if not os.path.exists(IMG_DIR):
+    os.makedirs(IMG_DIR)
 
-# Initialize Data if not exists
+# Initialize Report Database
 if not os.path.exists(DATA_FILE):
-    df = pd.DataFrame(columns=["Timestamp", "ID", "Site", "User", "Risk_Level", "Category", "Observation", "Status", "Image_Path"])
-    df.to_csv(DATA_FILE, index=False)
+    pd.DataFrame(columns=[
+        "ID", "Timestamp", "Site", "User", "Role", "Risk", 
+        "Category", "Observation", "Status", "Image_Path"
+    ]).to_csv(DATA_FILE, index=False)
+
+# Initialize Audit Log (GENUINE LOGGING)
+if not os.path.exists(LOG_FILE):
+    pd.DataFrame(columns=[
+        "Timestamp", "User", "Role", "Event", "Session_ID"
+    ]).to_csv(LOG_FILE, index=False)
+
+# --- 4. AUTH & LOGGING FUNCTIONS ---
+
+def log_event(user, role, event):
+    """Writes a genuine event to the CSV log file."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Simulate a Session ID / IP signature for authenticity
+    session_sig = f"SESSION-{os.urandom(2).hex().upper()}"
+    
+    with open(LOG_FILE, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([timestamp, user, role, event, session_sig])
 
 def check_login(username, password):
-    if username in USERS and USERS[username]['password'] == password:
-        return USERS[username]
-    return None
-
-def save_inspection(site, user, risk, category, observation, image):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    report_id = f"INC-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    
-    img_path = "No Image"
-    if image:
-        if not os.path.exists("evidence_photos"): os.makedirs("evidence_photos")
-        img_path = f"evidence_photos/{report_id}.jpg"
-        with open(img_path, "wb") as f:
-            f.write(image.getbuffer())
-
-    new_data = {
-        "Timestamp": timestamp, "ID": report_id, "Site": site, "User": user,
-        "Risk_Level": risk, "Category": category, "Observation": observation,
-        "Status": "Pending Review", "Image_Path": img_path
+    # HARDCODED USERS FOR DEMO
+    users = {
+        "worker": {"pwd": "123", "role": "Worker", "name": "John (Site A)"},
+        "manager": {"pwd": "456", "role": "Supervisor", "name": "Sarah (HQ)"},
+        "admin": {"pwd": "789", "role": "Admin", "name": "System Admin"}
     }
     
+    if username in users and users[username]['pwd'] == password:
+        return users[username]
+    return None
+
+def save_report(site, user, role, risk, category, observation, image_file):
+    report_id = f"INC-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # IMAGE HANDLING FIX
+    img_path = "No Image"
+    if image_file is not None:
+        img_path = os.path.join(IMG_DIR, f"{report_id}.jpg")
+        with open(img_path, "wb") as f:
+            f.write(image_file.getbuffer())
+    
+    new_record = {
+        "ID": report_id,
+        "Timestamp": timestamp,
+        "Site": site,
+        "User": user,
+        "Role": role,
+        "Risk": risk,
+        "Category": category,
+        "Observation": observation,
+        "Status": "Pending Review",
+        "Image_Path": img_path
+    }
+    
+    # Append to CSV
     df = pd.read_csv(DATA_FILE)
-    df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([new_record])], ignore_index=True)
     df.to_csv(DATA_FILE, index=False)
+    
+    # Log the action
+    log_event(user, role, f"Submitted Report {report_id}")
     return report_id
 
-# --- 4. PDF REPORT GENERATOR (OFFICIAL) ---
-class CompliancePDF(FPDF):
+# --- 5. PDF GENERATOR ---
+class PDF(FPDF):
     def header(self):
-        self.set_font('Arial', 'B', 12)
-        self.cell(0, 10, 'OFFICIAL COMPLIANCE REPORT', 0, 1, 'C')
+        self.set_font('Arial', 'B', 14)
+        self.cell(0, 10, 'OFFICIAL SITE INSPECTION REPORT', 0, 1, 'C')
         self.ln(5)
-
     def footer(self):
         self.set_y(-15)
         self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Page {self.page_no()} | Generated by SiteSnap Compliance', 0, 0, 'C')
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
 
 def generate_pdf(record):
-    pdf = CompliancePDF()
+    pdf = PDF()
     pdf.add_page()
+    pdf.set_font("Arial", size=11)
     
-    # Title Section
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, f"Incident Report #{record['ID']}", 0, 1)
-    pdf.line(10, 30, 200, 30)
-    pdf.ln(10)
-    
-    # Details Table
-    pdf.set_font("Arial", size=10)
-    details = [
-        ("Date & Time", record['Timestamp']),
-        ("Inspector", record['User']),
-        ("Site Location", record['Site']),
-        ("Risk Level", record['Risk_Level']),
-        ("Category", record['Category']),
-    ]
-    
-    for key, value in details:
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(40, 10, key, 1)
-        pdf.set_font("Arial", size=10)
-        pdf.cell(0, 10, str(value), 1, 1)
+    # Content
+    fields = ["ID", "Timestamp", "Site", "User", "Risk", "Category", "Observation"]
+    for field in fields:
+        pdf.set_font("Arial", 'B', 11)
+        pdf.cell(40, 10, f"{field}:", 1)
+        pdf.set_font("Arial", '', 11)
+        pdf.cell(0, 10, str(record[field]), 1, 1)
         
-    pdf.ln(5)
-    pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 10, "Observation / Non-Compliance Note:", 0, 1)
-    pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 10, record['Observation'], 1)
-    
-    # Image Evidence
+    # Image
     if record['Image_Path'] != "No Image" and os.path.exists(record['Image_Path']):
         pdf.ln(10)
-        pdf.cell(0, 10, "Photographic Evidence:", 0, 1)
+        pdf.cell(0, 10, "Attached Evidence:", 0, 1)
         pdf.image(record['Image_Path'], w=100)
-
+        
     return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. MAIN APP LOGIC ---
+# --- 6. MAIN APP ---
 
 # A. LOGIN SCREEN
-if 'user_info' not in st.session_state:
+if 'user' not in st.session_state:
     c1, c2, c3 = st.columns([1,1,1])
     with c2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.image("https://cdn-icons-png.flaticon.com/512/9562/9562768.png", width=80)
-        st.title("SiteSnap Compliance")
-        st.caption("Enterprise Risk Management System")
+        st.title("🛡️ SiteSnap Login")
+        st.markdown("### Enterprise Access Portal")
         
         with st.form("login"):
-            u = st.text_input("Username (Try: worker, manager, or admin)")
-            p = st.text_input("Password (Try: 123, 456, 789)", type="password")
-            btn = st.form_submit_button("Secure Login 🔒")
-        
-        if btn:
-            user = check_login(u, p)
-            if user:
-                st.session_state.user_info = user
-                st.rerun()
-            else:
-                st.error("Access Denied: Invalid Credentials")
+            u = st.text_input("Username", placeholder="e.g. worker, manager, admin")
+            p = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Authenticate")
+            
+            if submitted:
+                valid_user = check_login(u, p)
+                if valid_user:
+                    st.session_state.user = valid_user
+                    log_event(valid_user['name'], valid_user['role'], "Login Success")
+                    st.success("Access Granted.")
+                    st.rerun()
+                else:
+                    st.error("Invalid Credentials.")
     st.stop()
 
-# B. LOGGED IN UI
-user = st.session_state.user_info
+# B. DASHBOARD (LOGGED IN)
+user = st.session_state.user
 role = user['role']
 
-# SIDEBAR NAVIGATION
+# SIDEBAR
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/9562/9562768.png", width=50)
-    st.markdown(f"**User:** {user['name']}")
-    st.markdown(f"**Role:** `{role.upper()}`")
+    st.markdown(f"👤 **{user['name']}**")
+    st.markdown(f"🔑 **{role.upper()}**")
     st.markdown("---")
     
-    # Dynamic Menu based on Role
-    options = []
+    # ROLE BASED NAVIGATION
+    menu = ["Logout"]
     if role == "Worker":
-        options = ["📝 Submit Inspection", "📂 My History"]
+        menu = ["Submit Report", "Logout"]
     elif role == "Supervisor":
-        options = ["📊 Compliance Dashboard", "✅ Review Pending", "📂 Gallery"]
+        menu = ["Dashboard", "Pending Reviews", "Logout"]
     elif role == "Admin":
-        options = ["📊 Master Dashboard", "👥 User Audit", "⚙️ System Settings"]
+        menu = ["Master Dashboard", "Audit Logs", "Data Export", "Logout"]
         
-    selected = st.radio("Module", options)
+    choice = st.radio("Navigation", menu)
     
-    st.markdown("---")
-    if st.button("Log Out"):
-        del st.session_state.user_info
+    if choice == "Logout":
+        log_event(user['name'], role, "Logout")
+        del st.session_state.user
         st.rerun()
 
-# --- MODULES ---
+# --- PAGES ---
 
-# 1. WORKER: SUBMIT FORM
-if "Submit Inspection" in selected:
-    st.title("📝 New Non-Compliance Report")
-    st.info("Please complete all mandatory fields for ISO 9001 compliance.")
+# 1. SUBMIT REPORT (FIXED UPLOAD)
+if choice == "Submit Report":
+    st.title("📝 New Incident Report")
     
-    with st.form("compliance_form", clear_on_submit=True):
+    with st.form("report_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            site = st.selectbox("Site ID", ["Site-Alpha (NY)", "Site-Beta (TX)", "Site-Gamma (CA)"])
-            risk = st.select_slider("Risk Classification", ["Low (Cosmetic)", "Medium (Functional)", "High (Safety)", "CRITICAL (Stop Work)"])
+            site = st.selectbox("Site Location", ["Site A (Construction)", "Site B (Warehouse)", "Site C (Office)"])
+            risk = st.select_slider("Risk Level", ["Low", "Medium", "High", "CRITICAL"])
         with c2:
-            cat = st.selectbox("Category", ["PPE Violation", "Structural Integrity", "Electrical Hazard", "Environmental Spill"])
+            cat = st.selectbox("Category", ["Safety", "Electrical", "Structural", "Personnel"])
             
-            # DUAL UPLOAD OPTIONS
-            st.markdown("**Evidence Upload:**")
-            upload_type = st.radio("Source", ["Camera", "File Upload"], horizontal=True, label_visibility="collapsed")
-            if upload_type == "Camera":
-                img = st.camera_input("Capture Evidence")
+            # FIXED UPLOAD LOGIC
+            st.markdown("---")
+            st.markdown("**Attach Evidence:**")
+            upload_mode = st.radio("Input Mode", ["Use Camera", "Upload File"], horizontal=True)
+            
+            img_file = None
+            if upload_mode == "Use Camera":
+                img_file = st.camera_input("Take Photo")
             else:
-                img = st.file_uploader("Upload Document/Photo", type=['jpg', 'png', 'pdf'])
+                img_file = st.file_uploader("Choose Image", type=['jpg', 'png', 'jpeg'])
 
-        obs = st.text_area("Detailed Observation Log")
+        obs = st.text_area("Observations / Notes")
+        submit = st.form_submit_button("🚀 Submit Report")
         
-        # Digital Signature Simulation
-        signed = st.checkbox(f"I, {user['name']}, certify this data is accurate.")
-        
-        if st.form_submit_button("🚀 Submit to Compliance DB"):
-            if signed and obs:
-                rid = save_inspection(site, user['name'], risk, cat, obs, img)
-                st.success(f"Report {rid} logged successfully. Pending Supervisor Review.")
+        if submit:
+            if obs:
+                # Save
+                rid = save_report(site, user['name'], role, risk, cat, obs, img_file)
+                st.success(f"✅ Report {rid} Submitted Successfully!")
             else:
-                st.error("Signature and Observation are mandatory.")
+                st.error("Please add observation notes.")
 
-# 2. SUPERVISOR/ADMIN: DASHBOARD
-elif "Dashboard" in selected:
-    st.title(f"📊 {role} Dashboard")
+# 2. DASHBOARD (SUPERVISOR/ADMIN)
+elif choice in ["Dashboard", "Master Dashboard"]:
+    st.title("📊 Compliance Overview")
     
-    df = pd.read_csv(DATA_FILE)
-    
-    # Top Metrics
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Incidents", len(df))
-    m2.metric("Open Cases", len(df[df['Status']=="Pending Review"]))
-    m3.metric("Critical Risks", len(df[df['Risk_Level'].str.contains("CRITICAL")]))
-    m4.metric("Sites Active", df['Site'].nunique())
-    
-    st.markdown("### 📉 Risk Trend Analysis")
-    st.bar_chart(df['Risk_Level'].value_counts())
-    
-    st.markdown("### 📋 Recent Compliance Logs")
-    st.dataframe(df.tail(5), use_container_width=True)
+    if os.path.exists(DATA_FILE):
+        df = pd.read_csv(DATA_FILE)
+        if not df.empty:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Reports", len(df))
+            m2.metric("Critical Risks", len(df[df['Risk'] == "CRITICAL"]))
+            m3.metric("Pending Review", len(df[df['Status'] == "Pending Review"]))
+            
+            st.markdown("### Recent Activity")
+            st.dataframe(df.tail(10), use_container_width=True)
+        else:
+            st.info("No data available.")
 
-# 3. SUPERVISOR: REVIEW PENDING
-elif "Review Pending" in selected:
-    st.title("✅ Review Pending Reports")
-    
+# 3. PENDING REVIEWS (SUPERVISOR)
+elif choice == "Pending Reviews":
+    st.title("📋 Pending Approvals")
     df = pd.read_csv(DATA_FILE)
     pending = df[df['Status'] == "Pending Review"]
     
     if pending.empty:
-        st.success("No pending reports. All compliant.")
+        st.success("All caught up! No pending reports.")
     else:
         for idx, row in pending.iterrows():
-            with st.expander(f"{row['ID']} - {row['Risk_Level']} ({row['Site']})"):
+            with st.expander(f"{row['ID']} - {row['Risk']} ({row['Site']})"):
                 c1, c2 = st.columns([1, 2])
                 with c1:
                     if row['Image_Path'] != "No Image" and os.path.exists(row['Image_Path']):
@@ -266,28 +266,36 @@ elif "Review Pending" in selected:
                     else:
                         st.write("No Image")
                 with c2:
-                    st.write(f"**Observer:** {row['User']}")
-                    st.write(f"**Observation:** {row['Observation']}")
+                    st.write(f"**User:** {row['User']}")
+                    st.write(f"**Note:** {row['Observation']}")
                     
-                    b1, b2, b3 = st.columns(3)
-                    if b1.button("✅ Approve", key=f"app_{idx}"):
-                        st.toast("Report Approved")
-                        # In real app, update DB status here
-                    if b2.button("❌ Reject", key=f"rej_{idx}"):
-                        st.toast("Report Rejected")
-                    if b3.button("📄 Download PDF", key=f"pdf_{idx}"):
-                        pdf_data = generate_pdf(row)
-                        st.download_button("Download", pdf_data, file_name=f"{row['ID']}.pdf")
+                    if st.button("Download PDF", key=f"pdf_{idx}"):
+                        pdf = generate_pdf(row)
+                        st.download_button("Click to Download", pdf, file_name=f"{row['ID']}.pdf")
 
-# 4. ADMIN: AUDIT LOGS
-elif "User Audit" in selected:
-    st.title("👥 System Audit Logs")
-    st.warning("Restricted Access: Admin Only")
+# 4. AUDIT LOGS (ADMIN ONLY - GENUINE)
+elif choice == "Audit Logs":
+    st.title("🕵️ Security Audit Logs")
+    st.markdown("Tracking all login events and data submissions.")
     
-    audit_data = {
-        "User": ["John (Site A)", "Sarah (Regional)", "John (Site A)", "System Admin"],
-        "Action": ["Login", "Login", "Submit Report INC-2025...", "System Config Change"],
-        "Time": ["08:00 AM", "08:15 AM", "09:30 AM", "10:00 AM"],
-        "IP Address": ["192.168.1.10", "192.168.1.12", "192.168.1.10", "10.0.0.1"]
-    }
-    st.table(audit_data)
+    if os.path.exists(LOG_FILE):
+        log_df = pd.read_csv(LOG_FILE)
+        # Show latest first
+        log_df = log_df.iloc[::-1]
+        st.dataframe(log_df, use_container_width=True)
+    else:
+        st.info("No logs generated yet.")
+
+# 5. DATA EXPORT (ADMIN ONLY)
+elif choice == "Data Export":
+    st.title("💾 Data Management")
+    st.write("Download the full compliance database for external auditing.")
+    
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "rb") as f:
+            st.download_button(
+                label="📥 Download Full Database (CSV)",
+                data=f,
+                file_name="site_snap_full_dump.csv",
+                mime="text/csv"
+            )
