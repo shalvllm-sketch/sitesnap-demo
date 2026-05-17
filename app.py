@@ -23,16 +23,41 @@ if "diagnostics" not in st.session_state:
 if "current_scraped_page" not in st.session_state:
     st.session_state.current_scraped_page = 1
 
-# --- CUSTOM CSS ---
+# --- ULTRA-PREMIUM MODERN UI CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     * { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #f8fafc; }
-    .block-container { padding-top: 4rem !important; max-width: 1200px; }
+    .block-container { padding-top: 5rem !important; max-width: 1200px; }
+    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    
+    /* FIX: Removed header {visibility: hidden;} to prevent mobile button annihilation */
+    header { background-color: transparent !important; }
+    
+    /* PREMIUM PATCH: Styles Streamlit's native sidebar collapse/expand button into a beautiful floating action item */
+    [data-testid="stSidebarCollapseButton"] {
+        background-color: #0f172a !important;
+        color: #ffffff !important;
+        border-radius: 12px !important;
+        padding: 6px !important;
+        position: fixed !important;
+        top: 16px !important;
+        left: 16px !important;
+        z-index: 999999 !important;
+        box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.15) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        transition: transform 0.2s ease !important;
+    }
+    [data-testid="stSidebarCollapseButton"]:hover {
+        transform: scale(1.05) !important;
+        background-color: #1e293b !important;
+    }
+    [data-testid="stSidebarCollapseButton"] svg {
+        fill: #ffffff !important;
+    }
     
     .main-title {
         text-align: center;
@@ -45,13 +70,16 @@ st.markdown("""
         letter-spacing: -1.5px;
         line-height: 1.1;
     }
+    
     .sub-title {
         text-align: center;
         color: #64748b;
         font-size: 1.15rem;
         margin-bottom: 45px;
         font-weight: 400;
+        letter-spacing: -0.2px;
     }
+
     .results-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -59,6 +87,7 @@ st.markdown("""
         margin-top: 15px;
         margin-bottom: 40px;
     }
+    
     .product-card {
         background: #ffffff;
         border-radius: 24px;
@@ -76,6 +105,7 @@ st.markdown("""
         box-shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.12);
         border-color: #cbd5e1;
     }
+    
     .score-badge {
         position: absolute;
         top: 16px;
@@ -90,6 +120,7 @@ st.markdown("""
         z-index: 10;
         box-shadow: 0 2px 10px rgba(0,0,0,0.03);
     }
+    
     .img-container {
         width: 100%;
         height: 240px;
@@ -101,17 +132,59 @@ st.markdown("""
         border-bottom: 1px solid #f1f5f9;
     }
     .product-image { max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
-    .card-content { padding: 24px; display: flex; flex-direction: column; flex-grow: 1; }
-    .product-title {
-        color: #1e293b; font-size: 0.95rem; font-weight: 600; line-height: 1.5;
-        margin: 14px 0 20px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-        overflow: hidden; flex-grow: 1;
+    
+    .card-content {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        background: #ffffff;
     }
-    .price-row { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 14px; border-top: 1px solid #f1f5f9; }
+    
+    .product-title {
+        color: #1e293b; 
+        font-size: 0.95rem; 
+        font-weight: 600;
+        line-height: 1.5;
+        margin: 14px 0 20px 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 3; 
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        flex-grow: 1;
+    }
+    
+    .price-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 14px;
+        border-top: 1px solid #f1f5f9;
+    }
     .product-price { color: #0f172a; font-weight: 800; font-size: 1.4rem; margin: 0; letter-spacing: -0.5px; }
-    .buy-btn { text-decoration: none; background: #0f172a; color: #ffffff !important; padding: 10px 20px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
+    
+    .buy-btn {
+        text-decoration: none; 
+        background: #0f172a; 
+        color: #ffffff !important; 
+        padding: 10px 20px; 
+        border-radius: 12px; 
+        font-size: 0.85rem; 
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
     .buy-btn:hover { background: #1e293b; }
-    .debug-box { background-color: #f1f5f9; border-left: 4px solid #94a3b8; padding: 12px 16px; border-radius: 8px; font-size: 0.75rem; color: #64748b; font-family: monospace; }
+    
+    .debug-box {
+        background-color: #f1f5f9;
+        border-left: 4px solid #94a3b8;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        color: #64748b;
+        font-family: monospace;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -241,7 +314,6 @@ def scrape_flipkart(query, page=1):
     products = []
     log = f"Flipkart (Pg {page}): "
     try:
-        # THE FIXED LINE: Removed manual headers to allow curl_cffi to generate an authentic browser fingerprint
         response = requests.get(url, impersonate=BROWSER_VERSION, timeout=10, verify=False)
         log += f"Code {response.status_code} | "
         soup = BeautifulSoup(response.text, "html.parser")
