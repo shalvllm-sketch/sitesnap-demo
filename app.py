@@ -23,15 +23,13 @@ if "diagnostics" not in st.session_state:
 if "current_scraped_page" not in st.session_state:
     st.session_state.current_scraped_page = 1
 
-# --- ULTRA-PREMIUM MODERN UI CSS ---
+# --- CUSTOM CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    
     * { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #f8fafc; }
     .block-container { padding-top: 4rem !important; max-width: 1200px; }
-    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -47,24 +45,20 @@ st.markdown("""
         letter-spacing: -1.5px;
         line-height: 1.1;
     }
-    
     .sub-title {
         text-align: center;
         color: #64748b;
         font-size: 1.15rem;
         margin-bottom: 45px;
         font-weight: 400;
-        letter-spacing: -0.2px;
     }
-
     .results-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 28px;
+        gap: 24px;
         margin-top: 15px;
-        margin-bottom: 50px;
+        margin-bottom: 40px;
     }
-    
     .product-card {
         background: #ffffff;
         border-radius: 24px;
@@ -82,23 +76,19 @@ st.markdown("""
         box-shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.12);
         border-color: #cbd5e1;
     }
-    
     .score-badge {
         position: absolute;
         top: 16px;
         right: 16px;
         background: rgba(255, 255, 255, 0.9);
         backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
         border: 1px solid;
         font-weight: 700;
         font-size: 0.8rem;
         padding: 5px 10px;
         border-radius: 99px;
         z-index: 10;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
     }
-    
     .img-container {
         width: 100%;
         height: 240px;
@@ -110,65 +100,21 @@ st.markdown("""
         border-bottom: 1px solid #f1f5f9;
     }
     .product-image { max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
-    
-    .card-content {
-        padding: 24px;
-        display: flex;
-        flex-direction: column;
-        flex-grow: 1;
-        background: #ffffff;
-    }
-    
+    .card-content { padding: 24px; display: flex; flex-direction: column; flex-grow: 1; }
     .product-title {
-        color: #1e293b; 
-        font-size: 0.95rem; 
-        font-weight: 600;
-        line-height: 1.5;
-        margin: 14px 0 20px 0;
-        display: -webkit-box;
-        -webkit-line-clamp: 3; 
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        flex-grow: 1;
+        color: #1e293b; font-size: 0.95rem; font-weight: 600; line-height: 1.5;
+        margin: 14px 0 20px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+        overflow: hidden; flex-grow: 1;
     }
-    
-    .price-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: auto;
-        padding-top: 14px;
-        border-top: 1px solid #f1f5f9;
-    }
-    .product-price { color: #0f172a; font-weight: 800; font-size: 1.4rem; margin: 0; letter-spacing: -0.5px; }
-    
-    .buy-btn {
-        text-decoration: none; 
-        background: #0f172a; 
-        color: #ffffff !important; 
-        padding: 10px 20px; 
-        border-radius: 12px; 
-        font-size: 0.85rem; 
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
-    .buy-btn:hover { background: #1e293b; }
-    
-    .debug-box {
-        background-color: #f1f5f9;
-        border-left: 4px solid #94a3b8;
-        padding: 12px 16px;
-        border-radius: 8px;
-        font-size: 0.75rem;
-        color: #64748b;
-        font-family: monospace;
-    }
+    .price-row { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 14px; border-top: 1px solid #f1f5f9; }
+    .product-price { color: #0f172a; font-weight: 800; font-size: 1.4rem; margin: 0; }
+    .buy-btn { text-decoration: none; background: #0f172a; color: #ffffff !important; padding: 10px 20px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
+    .debug-box { background-color: #f1f5f9; border-left: 4px solid #94a3b8; padding: 12px 16px; border-radius: 8px; font-size: 0.75rem; color: #64748b; font-family: monospace; }
 </style>
 """, unsafe_allow_html=True)
 
 BROWSER_VERSION = "chrome120" 
 
-# Full set of matching headers to prevent DataCenter IP flagging
 ENHANCED_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
@@ -306,85 +252,66 @@ def scrape_nykaa(query, page=1):
     return products, log
 
 def scrape_myntra(query, page=1):
-    # FIXED: Pattern matching to dynamically mirror Myntra's clean slug criteria
     slug = query.replace(" ", "-").lower()
     encoded_query = urllib.parse.quote(query)
+    rows_per_page = 50
+    offset = (page - 1) * rows_per_page
     
-    # Builds the precise URL alignment discovered via your manual search testing
-    url = f"https://www.myntra.com/{slug}?rawQuery={encoded_query}&p={page}"
+    # REVOLUTIONARY FIX: Hit Myntra's exact internal app gateway JSON endpoint directly 
+    # to completely circumvent server-side HTML bot restrictions
+    url = f"https://www.myntra.com/gateway/v4/search/{slug}?rawQuery={encoded_query}&rows={rows_per_page}&o={offset}"
     products = []
-    log = f"Myntra (Pg {page}): "
+    log = f"Myntra API (Pg {page}): "
+    
     try:
         response = requests.get(url, impersonate=BROWSER_VERSION, headers=ENHANCED_HEADERS, timeout=10, verify=False)
-        soup = BeautifulSoup(response.text, "html.parser")
-        scripts = soup.find_all('script')
-        found_data = False
+        log += f"Code {response.status_code} | "
         
-        # 1. Try Structured JSON extraction with flexible regex layout boundaries
-        for script in scripts:
-            if script.string and ('searchData' in script.string or 'products' in script.string):
-                try:
-                    content = script.string.strip()
-                    # Safe regex split across arbitrary spacing formatting configurations
-                    split_parts = re.split(r'window\.__myx\s*=\s*', content)
-                    if len(split_parts) > 1:
-                        json_text = split_parts[1].strip().rstrip(';')
-                    else: 
-                        json_text = content
-                        
-                    data = json.loads(json_text)
-                    
-                    def find_products_recursive(node):
-                        if isinstance(node, dict):
-                            if 'products' in node and isinstance(node['products'], list): return node['products']
-                            for v in node.values():
-                                r = find_products_recursive(v)
-                                if r: return r
-                        elif isinstance(node, list):
-                            for i in node:
-                                r = find_products_recursive(i)
-                                if r: return r
-                        return None
-                    
-                    items = find_products_recursive(data)
-                    if items:
-                        for item in items[:16]:
-                            title = f"{item.get('brand', '')} {item.get('productName', '')}".strip()
-                            price_int = item.get('price', 0)
-                            link = f"https://www.myntra.com/{item.get('landingPageUrl', '')}"
-                            image_url = item.get('searchImage', "https://via.placeholder.com/200")
-                            if price_int > 0:
-                                products.append({"platform": "Myntra", "title": title, "price": f"₹{price_int}", "price_int": price_int, "link": link, "image": image_url})
-                        found_data = True
-                        break
-                except: continue
-                    
-        # 2. BULLETPROOF DOM FALLBACK: Fires if data center profiling blocks initialization states
-        if not found_data or len(products) == 0:
-            cards = soup.find_all('li', class_='product-base') or soup.select('div[class*="product-base"]') or soup.select('.productCard') or soup.select('li[class*="product"]')
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Extract items from the gateway payload layout structure safely
+            items = data.get('products', []) if 'products' in data else data.get('results', {}).get('products', [])
+            if not items and 'searchData' in data:
+                items = data.get('searchData', {}).get('results', {}).get('products', [])
+                
+            for item in items[:16]:
+                title = f"{item.get('brand', '')} {item.get('productName', '')}".strip()
+                price_int = item.get('price', 0)
+                price_str = f"₹{price_int}"
+                landing_url = item.get('landingPageUrl', '')
+                link = f"https://www.myntra.com/{landing_url}" if landing_url else "https://www.myntra.com"
+                image_url = item.get('searchImage', "https://via.placeholder.com/200")
+                
+                if price_int > 0:
+                    products.append({"platform": "Myntra", "title": title, "price": price_str, "price_int": price_int, "link": link, "image": image_url})
+            
+            log += f"Extracted {len(products)} items from direct JSON API."
+            
+        # Fallback back to raw HTML structure if search keywords fall outside normal slug bounds
+        if len(products) == 0:
+            fallback_url = f"https://www.myntra.com/{slug}?rawQuery={encoded_query}&p={page}"
+            fb_resp = requests.get(fallback_url, impersonate=BROWSER_VERSION, headers=ENHANCED_HEADERS, timeout=10, verify=False)
+            soup = BeautifulSoup(fb_resp.text, "html.parser")
+            cards = soup.find_all('li', class_='product-base') or soup.select('.productCard')
             for card in cards[:16]:
                 try:
-                    brand_elem = card.find(['h3', 'div', 'span'], class_=re.compile(r'brand', re.I))
-                    title_elem = card.find(['h4', 'p', 'div'], class_=re.compile(r'product', re.I))
-                    brand = brand_elem.text.strip() if brand_elem else ""
-                    product_name = title_elem.text.strip() if title_elem else "Product"
-                    title = f"{brand} {product_name}".strip()
-                    
-                    price_elem = card.find('span', class_=re.compile(r'discountedPrice|price', re.I)) or card.find('div', class_=re.compile(r'price', re.I))
+                    brand_elem = card.find(['h3', 'div'], class_='product-brand')
+                    title_elem = card.find(['h4', 'p'], class_='product-product')
+                    title = f"{brand_elem.text.strip() if brand_elem else ''} {title_elem.text.strip() if title_elem else ''}".strip()
+                    price_elem = card.find('span', class_='product-discountedPrice') or card.find('div', class_='product-price')
                     price_str = price_elem.text.strip() if price_elem else "0"
                     if "Rs." in price_str: price_str = price_str.split("Rs.")[-1]
                     price_int = clean_price(price_str)
-                    
                     link_elem = card.find('a')
                     link = "https://www.myntra.com/" + link_elem['href'].lstrip('/') if link_elem else "#"
-                    
                     img_elem = card.find('img')
                     image_url = img_elem['src'] if img_elem and 'src' in img_elem.attrs else "https://via.placeholder.com/200"
-                    
                     if price_int > 0:
                         products.append({"platform": "Myntra", "title": title, "price": f"₹{price_int}", "price_int": price_int, "link": link, "image": image_url})
                 except Exception: continue
-        log += f"Found {len(products)} items."
+            log += f"Fallback execution captured {len(products)} cards."
+            
     except Exception as e: log += f"Error: {str(e)[:20]}"
     return products, log
 
