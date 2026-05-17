@@ -54,7 +54,7 @@ st.markdown("""
     .results-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 28px;
+        gap: 24px;
         margin-top: 15px;
         margin-bottom: 40px;
     }
@@ -238,8 +238,9 @@ def scrape_nykaa(query, page=1):
     return products, log
 
 def scrape_myntra(query, page=1):
-    search_term = query.replace(" ", "-").lower()
-    url = f"https://www.myntra.com/{search_term}?p={page}"
+    # FIXED: Swapped out the direct SEO landing route for the robust programmatic search engine path
+    search_term = query.replace(" ", "%20")
+    url = f"https://www.myntra.com/search?q={search_term}&p={page}"
     products = []
     log = f"Myntra (Pg {page}): "
     try:
@@ -248,7 +249,6 @@ def scrape_myntra(query, page=1):
         scripts = soup.find_all('script')
         found_data = False
         
-        # 1. Try Structured JSON extraction first
         for script in scripts:
             if script.string and ('searchData' in script.string or 'products' in script.string):
                 try:
@@ -283,7 +283,6 @@ def scrape_myntra(query, page=1):
                         break
                 except: continue
                     
-        # 2. BULLETPROOF DOM FALLBACK: Executed instantly if Myntra serves alternative layout to Cloud servers
         if not found_data or len(products) == 0:
             cards = soup.find_all('li', class_='product-base') or soup.select('div[class*="product-base"]') or soup.select('.productCard')
             for card in cards[:16]:
@@ -334,7 +333,6 @@ col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     query = st.text_input("Search", placeholder="e.g., Maybelline Eyeliner, Running Shoes...", label_visibility="collapsed")
 
-# Complete Reset on a Brand New Search
 if query and query != st.session_state.last_query:
     st.session_state.last_query = query
     st.session_state.display_count = 12
@@ -355,7 +353,6 @@ if query and query != st.session_state.last_query:
         st.session_state.diagnostics = f"{amz_log} <br> {nyk_log} <br> {myn_log}"
         st.rerun()
 
-# --- THE FEATURE: DEEP LIVE PAGINATION SCRAPE ---
 def trigger_deep_scrape():
     next_page = st.session_state.current_scraped_page + 1
     with st.spinner(f"🚀 Digging deeper! Extracting Page {next_page} from live networks..."):
@@ -363,7 +360,6 @@ def trigger_deep_scrape():
         nyk_res, nyk_log = scrape_nykaa(st.session_state.last_query, page=next_page)
         myn_res, myn_log = scrape_myntra(st.session_state.last_query, page=next_page)
         
-        # Append new findings to existing records instead of wiping them out
         combined = st.session_state.raw_results + amz_res + nyk_res + myn_res
         st.session_state.raw_results = calculate_deal_scores(combined, st.session_state.last_query)
         st.session_state.diagnostics += f"<br>{amz_log} <br> {nyk_log} <br> {myn_log}"
@@ -383,35 +379,37 @@ if st.session_state.raw_results:
 
     items_to_show = filtered_results[:st.session_state.display_count]
     
-    html_parts = ['<div class="results-grid">']
-    for item in items_to_show:
-        if item['platform'] == 'Amazon':
-            logo = '<span style="font-family: Arial, sans-serif; font-weight: 900; font-size: 1.15rem; color: #000; letter-spacing: -1px;">amazon<span style="color: #FF9900;">.in</span></span>'
-        elif item['platform'] == 'Nykaa':
-            logo = '<span style="font-family: Arial, sans-serif; font-weight: 900; font-size: 1.15rem; color: #FC2779; letter-spacing: 0.5px; text-transform: uppercase;">NYKAA</span>'
-        elif item['platform'] == 'Myntra':
-            logo = '<span style="font-family: Arial, sans-serif; font-weight: 900; font-size: 1.15rem; color: #FF3E6C; letter-spacing: -0.2px;">Myntra</span>'
+    if items_to_show:
+        html_parts = ['<div class="results-grid">']
+        for item in items_to_show:
+            if item['platform'] == 'Amazon':
+                logo = '<span style="font-family: Arial, sans-serif; font-weight: 900; font-size: 1.15rem; color: #000; letter-spacing: -1px;">amazon<span style="color: #FF9900;">.in</span></span>'
+            elif item['platform'] == 'Nykaa':
+                logo = '<span style="font-family: Arial, sans-serif; font-weight: 900; font-size: 1.15rem; color: #FC2779; letter-spacing: 0.5px; text-transform: uppercase;">NYKAA</span>'
+            elif item['platform'] == 'Myntra':
+                logo = '<span style="font-family: Arial, sans-serif; font-weight: 900; font-size: 1.15rem; color: #FF3E6C; letter-spacing: -0.2px;">Myntra</span>'
 
-        html_parts.append(
-f'''<div class="product-card">
-<div class="score-badge" style="border-color: {item['score_color']}; color: {item['score_color']};">🔥 {item['score']}</div>
-<div class="img-container">
-<img src="{item['image']}" class="product-image" loading="lazy">
-</div>
-<div class="card-content">
-<div style="margin-bottom: 4px;">{logo}</div>
-<h4 class="product-title">{item['title']}</h4>
-<div class="price-row">
-<p class="product-price">{item['price']}</p>
-<a href="{item['link']}" target="_blank" class="buy-btn">Get Deal</a>
-</div>
-</div>
-</div>'''
-        )
-    html_parts.append('</div>')
-    st.markdown("".join(html_parts), unsafe_allow_html=True)
+            html_parts.append(
+    f'''<div class="product-card">
+    <div class="score-badge" style="border-color: {item['score_color']}; color: {item['score_color']};">🔥 {item['score']}</div>
+    <div class="img-container">
+    <img src="{item['image']}" class="product-image" loading="lazy">
+    </div>
+    <div class="card-content">
+    <div style="margin-bottom: 4px;">{logo}</div>
+    <h4 class="product-title">{item['title']}</h4>
+    <div class="price-row">
+    <p class="product-price">{item['price']}</p>
+    <a href="{item['link']}" target="_blank" class="buy-btn">Get Deal</a>
+    </div>
+    </div>
+    </div>'''
+            )
+        html_parts.append('</div>')
+        st.markdown("".join(html_parts), unsafe_allow_html=True)
+    else:
+        st.info("No products match your current active sidebar filters or platform toggles.")
     
-    # Dual-Action Pagination Interface
     btn_col1, btn_col2, btn_col3 = st.columns([1, 2, 1])
     with btn_col2:
         if st.session_state.display_count < len(filtered_results):
@@ -419,7 +417,6 @@ f'''<div class="product-card">
                 st.session_state.display_count += 12
                 st.rerun()
         
-        # The user option to trigger an outright network expansion scrape
         if st.button("🚀 Live Deep Scrape Next Page", use_container_width=True, type="primary"):
             trigger_deep_scrape()
             st.rerun()
