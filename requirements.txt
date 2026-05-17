@@ -4,3 +4,6 @@ Pillow
 opencv-python-headless
 numpy
 fpdf
+streamlit
+beautifulsoup4
+curl_cffi
