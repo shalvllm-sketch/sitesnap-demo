@@ -23,14 +23,13 @@ if "diagnostics" not in st.session_state:
 if "current_scraped_page" not in st.session_state:
     st.session_state.current_scraped_page = 1
 
-# --- ULTRA-PREMIUM MODERN UI CSS ---
+# --- CUSTOM CSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     * { font-family: 'Inter', sans-serif; }
     .stApp { background-color: #f8fafc; }
     .block-container { padding-top: 4rem !important; max-width: 1200px; }
-    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -46,24 +45,20 @@ st.markdown("""
         letter-spacing: -1.5px;
         line-height: 1.1;
     }
-    
     .sub-title {
         text-align: center;
         color: #64748b;
         font-size: 1.15rem;
         margin-bottom: 45px;
         font-weight: 400;
-        letter-spacing: -0.2px;
     }
-
     .results-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 28px;
+        gap: 24px;
         margin-top: 15px;
-        margin-bottom: 50px;
+        margin-bottom: 40px;
     }
-    
     .product-card {
         background: #ffffff;
         border-radius: 24px;
@@ -81,7 +76,6 @@ st.markdown("""
         box-shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.12);
         border-color: #cbd5e1;
     }
-    
     .score-badge {
         position: absolute;
         top: 16px;
@@ -96,7 +90,6 @@ st.markdown("""
         z-index: 10;
         box-shadow: 0 2px 10px rgba(0,0,0,0.03);
     }
-    
     .img-container {
         width: 100%;
         height: 240px;
@@ -108,77 +101,21 @@ st.markdown("""
         border-bottom: 1px solid #f1f5f9;
     }
     .product-image { max-width: 100%; max-height: 100%; object-fit: contain; mix-blend-mode: multiply; }
-    
-    .card-content {
-        padding: 24px;
-        display: flex;
-        flex-direction: column;
-        flex-grow: 1;
-        background: #ffffff;
-    }
-    
+    .card-content { padding: 24px; display: flex; flex-direction: column; flex-grow: 1; }
     .product-title {
-        color: #1e293b; 
-        font-size: 0.95rem; 
-        font-weight: 600;
-        line-height: 1.5;
-        margin: 14px 0 20px 0;
-        display: -webkit-box;
-        -webkit-line-clamp: 3; 
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        flex-grow: 1;
+        color: #1e293b; font-size: 0.95rem; font-weight: 600; line-height: 1.5;
+        margin: 14px 0 20px 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+        overflow: hidden; flex-grow: 1;
     }
-    
-    .price-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: auto;
-        padding-top: 14px;
-        border-top: 1px solid #f1f5f9;
-    }
+    .price-row { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 14px; border-top: 1px solid #f1f5f9; }
     .product-price { color: #0f172a; font-weight: 800; font-size: 1.4rem; margin: 0; letter-spacing: -0.5px; }
-    
-    .buy-btn {
-        text-decoration: none; 
-        background: #0f172a; 
-        color: #ffffff !important; 
-        padding: 10px 20px; 
-        border-radius: 12px; 
-        font-size: 0.85rem; 
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
+    .buy-btn { text-decoration: none; background: #0f172a; color: #ffffff !important; padding: 10px 20px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
     .buy-btn:hover { background: #1e293b; }
-    
-    .debug-box {
-        background-color: #f1f5f9;
-        border-left: 4px solid #94a3b8;
-        padding: 12px 16px;
-        border-radius: 8px;
-        font-size: 0.75rem;
-        color: #64748b;
-        font-family: monospace;
-    }
+    .debug-box { background-color: #f1f5f9; border-left: 4px solid #94a3b8; padding: 12px 16px; border-radius: 8px; font-size: 0.75rem; color: #64748b; font-family: monospace; }
 </style>
 """, unsafe_allow_html=True)
 
 BROWSER_VERSION = "chrome120" 
-
-ENHANCED_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Cache-Control": "max-age=0",
-    "Sec-Ch-Ua": '"Not/A)Brand";v="99", "Google Chrome";v="120", "Chromium";v="120"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1"
-}
 
 def calculate_deal_scores(results, query):
     if not results: return results
@@ -216,7 +153,7 @@ def scrape_amazon(query, page=1):
     products = []
     log = f"Amazon (Pg {page}): "
     try:
-        response = requests.get(url, impersonate=BROWSER_VERSION, headers=ENHANCED_HEADERS, timeout=10, verify=False)
+        response = requests.get(url, impersonate=BROWSER_VERSION, timeout=10, verify=False)
         soup = BeautifulSoup(response.text, "html.parser")
         cards = soup.find_all('div', {'data-component-type': 's-search-result'})
         for card in cards[:16]:
@@ -243,18 +180,16 @@ def scrape_nykaa(query, page=1):
     products = []
     log = f"Nykaa (Pg {page}): "
     try:
-        response = requests.get(url, impersonate=BROWSER_VERSION, headers=ENHANCED_HEADERS, timeout=10, verify=False)
+        response = requests.get(url, impersonate=BROWSER_VERSION, timeout=10, verify=False)
         soup = BeautifulSoup(response.text, "html.parser")
         scripts = soup.find_all('script')
         found_data = False
-        
         for script in scripts:
             if script.string and ('products' in script.string or 'finalPrice' in script.string):
                 try:
                     text = script.string.strip()
                     if '=' in text: text = text.split('=', 1)[1].strip().rstrip(';')
                     data = json.loads(text)
-                    
                     def search_dict_for_products(d):
                         if isinstance(d, dict):
                             if 'products' in d and isinstance(d['products'], list): return d['products']
@@ -266,7 +201,6 @@ def scrape_nykaa(query, page=1):
                                 res = search_dict_for_products(item)
                                 if res: return res
                         return None
-                    
                     items = search_dict_for_products(data)
                     if items:
                         for item in items[:16]:
@@ -280,7 +214,6 @@ def scrape_nykaa(query, page=1):
                         found_data = True
                         break
                 except: continue
-                
         if not found_data or len(products) == 0:
             cards = soup.select('[class*="product-wrapper"]') or soup.select('[class*="css-1rd7vky"]') or soup.select('[class*="productCard"]')
             for card in cards[:16]:
@@ -302,36 +235,31 @@ def scrape_nykaa(query, page=1):
     except Exception as e: log += f"Error: {str(e)[:20]}"
     return products, log
 
-# --- THE NEW BULLETPROOF FLIPKART ENGINE ---
 def scrape_flipkart(query, page=1):
     search_term = urllib.parse.quote(query)
     url = f"https://www.flipkart.com/search?q={search_term}&page={page}"
     products = []
     log = f"Flipkart (Pg {page}): "
     try:
-        response = requests.get(url, impersonate=BROWSER_VERSION, headers=ENHANCED_HEADERS, timeout=10, verify=False)
+        # THE FIXED LINE: Removed manual headers to allow curl_cffi to generate an authentic browser fingerprint
+        response = requests.get(url, impersonate=BROWSER_VERSION, timeout=10, verify=False)
         log += f"Code {response.status_code} | "
         soup = BeautifulSoup(response.text, "html.parser")
         
-        # Targets Flipkart's global item wrapper key which handles single arrays and grid variants
         cards = soup.select('div[data-id]')
         for card in cards[:16]:
             try:
                 img_elem = card.find('img')
-                # Flipkart puts the exact clean title inside img alt for SEO metrics
                 title = img_elem.get('alt', '').strip() if img_elem else ""
-                
                 if not title:
                     title_elem = card.find('a', class_=re.compile(r'title|name', re.I)) or card.find('div', class_=re.compile(r'title|name', re.I))
                     title = title_elem.text.strip() if title_elem else "Unknown Product"
                 
-                # Dynamic price tracker: isolates the first string containing the Indian currency indicator safely
                 price_str = "N/A"
                 for el in card.find_all(text=True):
                     if '₹' in el and len(el.strip()) < 12:
                         price_str = el.strip()
                         break
-                        
                 price_int = clean_price(price_str)
                 
                 link_elem = card.find('a', href=True)
@@ -380,7 +308,6 @@ if query and query != st.session_state.last_query:
         amz_res, amz_log = scrape_amazon(query, page=1)
         nyk_res, nyk_log = scrape_nykaa(query, page=1)
         flp_res, flp_log = scrape_flipkart(query, page=1)
-        
         all_results.extend(amz_res)
         all_results.extend(nyk_res)
         all_results.extend(flp_res)
@@ -409,13 +336,11 @@ if st.session_state.diagnostics:
 
 if st.session_state.raw_results:
     filtered_results = [item for item in st.session_state.raw_results if item['platform'] in selected_platforms and item['price_int'] <= max_price]
-    
     if sort_by == "Lowest Price ⬇️": filtered_results.sort(key=lambda x: x['price_int'])
     elif sort_by == "Highest Price ⬆️": filtered_results.sort(key=lambda x: x['price_int'], reverse=True)
     elif sort_by == "Smart Deal Score 🔥": filtered_results.sort(key=lambda x: x['score'], reverse=True)
 
     items_to_show = filtered_results[:st.session_state.display_count]
-    
     if items_to_show:
         html_parts = ['<div class="results-grid">']
         for item in items_to_show:
@@ -453,10 +378,8 @@ if st.session_state.raw_results:
             if st.button("⬇️ View More Cached Local Results", use_container_width=True):
                 st.session_state.display_count += 12
                 st.rerun()
-        
         if st.button("🚀 Live Deep Scrape Next Page", use_container_width=True, type="primary"):
             trigger_deep_scrape()
             st.rerun()
-            
 elif query and not st.session_state.raw_results:
     st.error("No active deals found. Try refining your search.")
